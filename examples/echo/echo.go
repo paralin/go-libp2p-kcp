@@ -19,6 +19,8 @@ import (
 	swarm "github.com/libp2p/go-libp2p-swarm"
 	bhost "github.com/libp2p/go-libp2p/p2p/host/basic"
 	ma "github.com/multiformats/go-multiaddr"
+	msmux "github.com/whyrusleeping/go-smux-multistream"
+	yamux "github.com/whyrusleeping/go-smux-yamux"
 
 	"github.com/paralin/go-libp2p-kcp"
 
@@ -83,13 +85,25 @@ func makeBasicHost(listenPort int, secio bool, randseed int64) (host.Host, error
 		ps.AddPubKey(pid, pub)
 	}
 
+	tpt := msmux.NewBlankTransport()
+	tpt.AddTransport("/yamux/1.0.0", yamux.DefaultTransport)
+
 	// Create swarm (implements libP2P Network)
-	netw, err := swarm.NewNetworkWithProtector(context.Background(), []ma.Multiaddr{}, pid, ps, nil, nil)
+	swrm, err := swarm.NewSwarmWithProtector(
+		context.Background(),
+		[]ma.Multiaddr{},
+		pid,
+		ps,
+		nil,
+		tpt,
+		nil,
+	)
 	if err != nil {
 		return nil, err
 	}
+	netw := (*swarm.Network)(swrm)
 
-	netw.Swarm().AddTransport(&kcp.KcpTransport{})
+	swrm.AddTransport(&kcp.KcpTransport{})
 	if err := netw.Listen(addr); err != nil {
 		return nil, err
 	}
